@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import CodeEditor from "./components/CodeEditor";
 import EventLoopCircle from "./components/EventLoopCircle";
 import { parseCode } from "./engine/parser";
-import { runSimulation } from "./engine/simulator";
+import { runSimulation, createSimulation } from "./engine/simulator";
 
 const initialCode = `console.log('Start');
 
@@ -28,12 +28,24 @@ export default function App() {
   });
 
   const [speed, setSpeed] = useState(800);
+
   const stopRef = useRef(false);
+
   const [currentAction, setCurrentAction] = useState("Idle");
   const [stepCount, setStepCount] = useState(0);
 
+  // Dynamic simulation used by Next Step
+  const [stepSimulation, setStepSimulation] = useState(null);
+
+  // ==========================================
+  // RUN - AUTOMATIC SIMULATION
+  // ==========================================
+
   const handleRun = async () => {
     stopRef.current = false;
+
+    // Start a fresh automatic simulation
+    setStepSimulation(null);
 
     setCurrentAction("Starting simulation");
     setStepCount(0);
@@ -45,12 +57,15 @@ export default function App() {
       output: [],
     });
 
+    // Parse whatever code the user currently has in the editor
     const instructions = parseCode(code);
 
     await runSimulation(
       instructions,
+
       (newState) => {
         setStepCount((prev) => prev + 1);
+
         setState(newState);
 
         if (newState.callStack.includes("promise callback")) {
@@ -67,7 +82,9 @@ export default function App() {
           setCurrentAction("Idle");
         }
       },
+
       speed,
+
       () => stopRef.current,
     );
 
@@ -76,16 +93,81 @@ export default function App() {
     }
   };
 
+  // ==========================================
+  // NEXT STEP - DYNAMIC SIMULATION
+  // ==========================================
+
+  const handleNextStep = () => {
+    // First click:
+    // Create a simulation from the user's actual code.
+    if (!stepSimulation) {
+      const instructions = parseCode(code);
+
+      const simulation = createSimulation(instructions);
+
+      setStepSimulation(simulation);
+
+      const result = simulation.step();
+
+      setState(result.state);
+      setCurrentAction(result.action);
+      setStepCount((prev) => prev + 1);
+
+      return;
+    }
+
+    // Following clicks:
+    // Continue the same simulation.
+    const result = stepSimulation.step();
+
+    setState(result.state);
+    setCurrentAction(result.action);
+    setStepCount((prev) => prev + 1);
+
+    if (result.finished) {
+      setStepSimulation(null);
+    }
+  };
+
+  // ==========================================
+  // RESET
+  // ==========================================
+
+  const handleReset = () => {
+    stopRef.current = true;
+
+    setStepSimulation(null);
+
+    setCurrentAction("Idle");
+
+    setStepCount(0);
+
+    setState({
+      callStack: [],
+      microtasks: [],
+      macrotasks: [],
+      output: [],
+    });
+  };
+
+  // ==========================================
+  // UI
+  // ==========================================
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4">
       {/* TOP BAR */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+        {/* TITLE */}
         <div>
           <h1 className="text-3xl font-bold">Event Loop Visualizer</h1>
+
           <p className="text-slate-400">JS Runtime Simulation</p>
         </div>
 
+        {/* CONTROLS */}
         <div className="flex items-center gap-4">
+          {/* SPEED */}
           <div className="flex items-center gap-2 text-sm">
             <span>Speed</span>
 
@@ -101,7 +183,9 @@ export default function App() {
             <span>{speed}ms</span>
           </div>
 
+          {/* BUTTONS */}
           <div className="flex gap-2">
+            {/* RUN */}
             <button
               onClick={handleRun}
               className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg"
@@ -109,19 +193,17 @@ export default function App() {
               Run
             </button>
 
+            {/* NEXT STEP */}
             <button
-              onClick={() => {
-                stopRef.current = true;
-                setCurrentAction("Idle");
-                setStepCount(0);
+              onClick={handleNextStep}
+              className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg"
+            >
+              Next Step
+            </button>
 
-                setState({
-                  callStack: [],
-                  microtasks: [],
-                  macrotasks: [],
-                  output: [],
-                });
-              }}
+            {/* RESET */}
+            <button
+              onClick={handleReset}
               className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg"
             >
               Reset
@@ -132,9 +214,10 @@ export default function App() {
 
       {/* MAIN LAYOUT */}
       <div className="flex gap-4 items-start">
-        {/* LEFT SIDE */}
+        {/* LEFT SIDE - CODE EDITOR */}
         <div className="w-[48%] bg-slate-800 rounded-2xl p-4 border border-slate-700 sticky top-4">
           <h2 className="font-semibold mb-2">Input Script</h2>
+
           <CodeEditor code={code} setCode={setCode} />
         </div>
 
@@ -142,13 +225,19 @@ export default function App() {
         <div className="w-[52%] flex flex-col gap-4">
           {/* TOP PANELS */}
           <div className="grid grid-cols-2 gap-4">
+            {/* CALL STACK */}
             <Panel title="Call Stack" items={state.callStack} />
+
+            {/* WEB APIS */}
             <Panel title="Web APIs" items={[]} />
 
+            {/* EVENT LOOP */}
             <EventLoopCircle />
 
+            {/* QUEUES */}
             <div className="flex flex-col gap-4">
               <Panel title="Microtask Queue" items={state.microtasks} />
+
               <Panel title="Macrotask Queue" items={state.macrotasks} />
             </div>
           </div>
@@ -200,9 +289,17 @@ export default function App() {
                 state.output.map((line, index) => (
                   <motion.div
                     key={index}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.2 }}
+                    initial={{
+                      opacity: 0,
+                      x: -10,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      x: 0,
+                    }}
+                    transition={{
+                      duration: 0.2,
+                    }}
                   >
                     {line}
                   </motion.div>
@@ -216,6 +313,10 @@ export default function App() {
   );
 }
 
+// ==========================================
+// PANEL COMPONENT
+// ==========================================
+
 function Panel({ title, items = [] }) {
   return (
     <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 min-h-[240px]">
@@ -228,9 +329,19 @@ function Panel({ title, items = [] }) {
           items.map((item, index) => (
             <motion.div
               key={index}
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.25 }}
+              initial={{
+                opacity: 0,
+                y: -10,
+                scale: 0.95,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              transition={{
+                duration: 0.25,
+              }}
               className="bg-slate-700 rounded-lg px-3 py-2 text-sm font-mono border border-slate-600 shadow-lg shadow-blue-500/10"
             >
               {item}
