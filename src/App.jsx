@@ -147,14 +147,17 @@ export default function App() {
   // ==========================================
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0b0b0c] via-[#111215] to-[#1a1208] text-white p-6">
       {/* TOP BAR */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4 bg-[#141518]/80 backdrop-blur-xl border border-amber-500/10 rounded-3xl px-6 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
         {/* TITLE */}
         <div>
-          <h1 className="text-3xl font-bold">Event Loop Visualizer</h1>
-
-          <p className="text-slate-400">JS Runtime Simulation</p>
+          <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent">
+            Event Loop Simulator
+          </h1>
+          <p className="text-slate-400 mt-1 text-sm tracking-wide">
+            Interactive JavaScript Runtime Simulator
+          </p>
         </div>
 
         {/* CONTROLS */}
@@ -170,6 +173,7 @@ export default function App() {
               step="100"
               value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
+              className="accent-orange-500"
             />
 
             <span>{speed}ms</span>
@@ -180,7 +184,7 @@ export default function App() {
             {/* RUN */}
             <button
               onClick={handleRun}
-              className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg"
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-orange-500/20 transition-all duration-200"
             >
               Run
             </button>
@@ -188,7 +192,7 @@ export default function App() {
             {/* NEXT STEP */}
             <button
               onClick={handleNextStep}
-              className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg"
+              className="bg-[#1f1a12] hover:bg-[#2a2115] border border-amber-500/20 text-amber-300 px-5 py-2.5 rounded-xl transition-all duration-200"
             >
               Next Step
             </button>
@@ -196,7 +200,7 @@ export default function App() {
             {/* RESET */}
             <button
               onClick={handleReset}
-              className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg"
+              className="bg-[#1f1a12] hover:bg-[#2a2115] border border-amber-500/20 text-amber-300 px-5 py-2.5 rounded-xl transition-all duration-200"
             >
               Reset
             </button>
@@ -207,7 +211,7 @@ export default function App() {
       {/* MAIN LAYOUT */}
       <div className="flex gap-4 items-start">
         {/* LEFT SIDE - CODE EDITOR */}
-        <div className="w-[48%] bg-slate-800 rounded-2xl p-4 border border-slate-700 sticky top-4">
+        <div className="w-[48%] bg-gradient-to-br from-[#0b0b0c] via-[#111215] to-[#1a1208]  top-4">
           <h2 className="font-semibold mb-2">Input Script</h2>
 
           <CodeEditor code={code} setCode={setCode} />
@@ -224,7 +228,7 @@ export default function App() {
             <Panel title="Web APIs" items={state.webApis} />
 
             {/* EVENT LOOP */}
-            <EventLoopCircle />
+            <EventLoopCircle currentAction={currentAction} />
 
             {/* QUEUES */}
             <div className="flex flex-col gap-4">
@@ -235,7 +239,7 @@ export default function App() {
           </div>
 
           {/* CURRENT ACTION */}
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+          <div className="bg-[#16171b]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
             <div className="flex items-center gap-2">
               <div
                 className={`w-3 h-3 rounded-full ${
@@ -256,11 +260,11 @@ export default function App() {
           </div>
 
           {/* SIMULATION STEPS */}
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+          <div className="bg-[#16171b]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Simulation Steps</h2>
 
-              <span className="text-2xl font-bold text-blue-400">
+              <span className="text-3xl font-black text-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]">
                 {stepCount}
               </span>
             </div>
@@ -271,7 +275,7 @@ export default function App() {
           </div>
 
           {/* OUTPUT */}
-          <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 min-h-[140px]">
+          <div className="bg-[#16171b]/80 backdrop-blur-xl rounded-3xl p-4 border border-white/5 min-h-[160px] shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
             <h2 className="font-semibold mb-2">Actual Output</h2>
 
             <div className="font-mono text-sm flex flex-col gap-1">
@@ -311,8 +315,10 @@ export default function App() {
 
 function Panel({ title, items = [] }) {
   return (
-    <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 min-h-[240px]">
-      <h3 className="font-semibold mb-2">{title}</h3>
+    <div className="bg-[#16171b]/80 backdrop-blur-xl rounded-3xl p-4 border border-white/5 min-h-[240px] shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+      <h3 className="font-semibold mb-3 text-amber-200 tracking-wide">
+        {title}
+      </h3>
 
       <div className="flex flex-col gap-2">
         {items.length === 0 ? (
@@ -334,7 +340,7 @@ function Panel({ title, items = [] }) {
               transition={{
                 duration: 0.25,
               }}
-              className="bg-slate-700 rounded-lg px-3 py-2 text-sm font-mono border border-slate-600 shadow-lg shadow-blue-500/10"
+              className="bg-[#232428] rounded-xl px-3 py-2 text-sm font-mono border border-white/5 shadow-lg shadow-black/30 text-amber-100"
             >
               {item}
             </motion.div>
