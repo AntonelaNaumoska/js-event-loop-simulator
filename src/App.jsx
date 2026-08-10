@@ -22,6 +22,7 @@ export default function App() {
 
   const [state, setState] = useState({
     callStack: [],
+    webApis: [],
     microtasks: [],
     macrotasks: [],
     output: [],
@@ -52,11 +53,11 @@ export default function App() {
 
     setState({
       callStack: [],
+      webApis: [],
       microtasks: [],
       macrotasks: [],
       output: [],
     });
-
     // Parse whatever code the user currently has in the editor
     const instructions = parseCode(code);
 
@@ -98,37 +99,27 @@ export default function App() {
   // ==========================================
 
   const handleNextStep = () => {
-    // First click:
-    // Create a simulation from the user's actual code.
-    if (!stepSimulation) {
+    let simulation = stepSimulation;
+
+    // First click: create simulation
+    if (!simulation) {
       const instructions = parseCode(code);
-
-      const simulation = createSimulation(instructions);
-
+      simulation = createSimulation(instructions);
       setStepSimulation(simulation);
-
-      const result = simulation.step();
-
-      setState(result.state);
-      setCurrentAction(result.action);
-      setStepCount((prev) => prev + 1);
-
-      return;
     }
 
-    // Following clicks:
-    // Continue the same simulation.
-    const result = stepSimulation.step();
+    const result = simulation.step();
 
     setState(result.state);
     setCurrentAction(result.action);
-    setStepCount((prev) => prev + 1);
 
     if (result.finished) {
       setStepSimulation(null);
+      return;
     }
-  };
 
+    setStepCount((prev) => prev + 1);
+  };
   // ==========================================
   // RESET
   // ==========================================
@@ -144,6 +135,7 @@ export default function App() {
 
     setState({
       callStack: [],
+      webApis: [],
       microtasks: [],
       macrotasks: [],
       output: [],
@@ -229,7 +221,7 @@ export default function App() {
             <Panel title="Call Stack" items={state.callStack} />
 
             {/* WEB APIS */}
-            <Panel title="Web APIs" items={[]} />
+            <Panel title="Web APIs" items={state.webApis} />
 
             {/* EVENT LOOP */}
             <EventLoopCircle />
