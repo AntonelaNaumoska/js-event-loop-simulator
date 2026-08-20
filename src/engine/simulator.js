@@ -160,12 +160,19 @@ export function createSimulation(instructions) {
   const macrotasks = [];
   const output = [];
 
+  // Internal timer information.
+  // This is NOT directly exposed to the UI.
+  const timers = [];
+
   let instructionIndex = 0;
   let phase = "sync";
   let currentInstruction = null;
   let currentTask = null;
   let stage = "enter";
   let finished = false;
+
+  // Simulated time
+  let currentTime = 0;
 
   function getState() {
     return {
@@ -175,6 +182,29 @@ export function createSimulation(instructions) {
       macrotasks: [...macrotasks],
       output: [...output],
     };
+  }
+
+  function moveExpiredTimers() {
+    const expired = timers.filter((timer) => timer.expiresAt <= currentTime);
+
+    for (const timer of expired) {
+      // Remove from Web APIs
+      const webIndex = webApis.indexOf(timer.value);
+
+      if (webIndex !== -1) {
+        webApis.splice(webIndex, 1);
+      }
+
+      // Move to Macrotask Queue
+      macrotasks.push(timer.value);
+
+      // Remove from timers
+      const timerIndex = timers.indexOf(timer);
+
+      if (timerIndex !== -1) {
+        timers.splice(timerIndex, 1);
+      }
+    }
   }
 
   function step() {
@@ -190,7 +220,7 @@ export function createSimulation(instructions) {
     // SYNCHRONOUS CODE
     // ======================================
     if (phase === "sync") {
-      // 1. Enter Call Stack
+      // ENTER
       if (stage === "enter") {
         if (instructionIndex >= instructions.length) {
           phase = "microtask";
@@ -204,7 +234,9 @@ export function createSimulation(instructions) {
         }
 
         currentInstruction = instructions[instructionIndex++];
+
         callStack.push(currentInstruction.type);
+
         stage = "execute";
 
         return {
@@ -214,7 +246,7 @@ export function createSimulation(instructions) {
         };
       }
 
-      // 2. Execute instruction
+      // EXECUTE
       if (stage === "execute") {
         const instr = currentInstruction;
 
@@ -222,32 +254,45 @@ export function createSimulation(instructions) {
           output.push(instr.value);
         }
 
-        // IMPORTANT:
-        // Do NOT add Promise/Timeout to queues yet.
-        // We wait until the stack frame is removed.
+        if (instr.type === "promise") {
+          // Promise will enter Microtask Queue
+          // when the current stack frame leaves.
+        }
+
+        if (instr.type === "timeout") {
+          const delay = instr.delay ?? 0;
+
+          // Show timer in Web APIs
+          webApis.push(instr.value);
+
+          // Store actual timer information separately
+          timers.push({
+            value: instr.value,
+            delay,
+            expiresAt: currentTime + delay,
+          });
+        }
 
         stage = "leave";
 
         return {
           state: getState(),
-          action: `Executing ${instr.type}`,
+          action:
+            instr.type === "timeout"
+              ? `setTimeout(${instr.delay ?? 0}ms) started in Web APIs`
+              : `Executing ${instr.type}`,
           finished: false,
         };
       }
 
-      // 3. Leave Call Stack
+      // LEAVE
       if (stage === "leave") {
         const instr = currentInstruction;
 
         callStack.pop();
 
-        // Now schedule the async task
         if (instr.type === "promise") {
           microtasks.push(instr.value);
-        }
-
-        if (instr.type === "timeout") {
-          macrotasks.push(instr.value);
         }
 
         currentInstruction = null;
@@ -255,7 +300,10 @@ export function createSimulation(instructions) {
 
         return {
           state: getState(),
-          action: "Call Stack operation completed",
+          action:
+            instr.type === "timeout"
+              ? "Timer waiting in Web APIs"
+              : "Call Stack operation completed",
           finished: false,
         };
       }
@@ -266,6 +314,9 @@ export function createSimulation(instructions) {
     // ======================================
     if (phase === "microtask") {
       if (stage === "enter") {
+        // Check timers first
+        moveExpiredTimers();
+
         if (microtasks.length === 0) {
           phase = "macrotask";
           stage = "enter";
@@ -278,7 +329,9 @@ export function createSimulation(instructions) {
         }
 
         currentTask = microtasks.shift();
+
         callStack.push("promise callback");
+
         stage = "execute";
 
         return {
@@ -290,6 +343,7 @@ export function createSimulation(instructions) {
 
       if (stage === "execute") {
         output.push(currentTask);
+
         stage = "leave";
 
         return {
@@ -301,6 +355,7 @@ export function createSimulation(instructions) {
 
       if (stage === "leave") {
         callStack.pop();
+
         currentTask = null;
         stage = "enter";
 
@@ -317,29 +372,55 @@ export function createSimulation(instructions) {
     // ======================================
     if (phase === "macrotask") {
       if (stage === "enter") {
-        if (macrotasks.length === 0) {
-          finished = true;
+        // Check if any timers are already expired
+        moveExpiredTimers();
+
+        // If there is a macrotask ready
+        if (macrotasks.length > 0) {
+          currentTask = macrotasks.shift();
+
+          callStack.push("timeout callback");
+
+          stage = "execute";
 
           return {
             state: getState(),
-            action: "Simulation completed",
-            finished: true,
+            action: "Timeout callback entered Call Stack",
+            finished: false,
           };
         }
 
-        currentTask = macrotasks.shift();
-        callStack.push("timeout callback");
-        stage = "execute";
+        // If timers are still waiting,
+        // advance simulated time to the next timer.
+        if (timers.length > 0) {
+          const nextTimer = timers.reduce((earliest, timer) => {
+            return timer.expiresAt < earliest.expiresAt ? timer : earliest;
+          });
+
+          currentTime = nextTimer.expiresAt;
+
+          moveExpiredTimers();
+
+          return {
+            state: getState(),
+            action: `Timer expired after ${nextTimer.delay}ms`,
+            finished: false,
+          };
+        }
+
+        // Nothing left
+        finished = true;
 
         return {
           state: getState(),
-          action: "Timeout callback entered Call Stack",
-          finished: false,
+          action: "Simulation completed",
+          finished: true,
         };
       }
 
       if (stage === "execute") {
         output.push(currentTask);
+
         stage = "leave";
 
         return {
@@ -351,6 +432,7 @@ export function createSimulation(instructions) {
 
       if (stage === "leave") {
         callStack.pop();
+
         currentTask = null;
         stage = "enter";
 
@@ -375,3 +457,226 @@ export function createSimulation(instructions) {
     isFinished: () => finished,
   };
 }
+
+// export function createSimulation(instructions) {
+//   const callStack = [];
+//   const webApis = [];
+//   const microtasks = [];
+//   const macrotasks = [];
+//   const output = [];
+
+//   let instructionIndex = 0;
+//   let phase = "sync";
+//   let currentInstruction = null;
+//   let currentTask = null;
+//   let stage = "enter";
+//   let finished = false;
+
+//   function getState() {
+//     return {
+//       callStack: [...callStack],
+//       webApis: [...webApis],
+//       microtasks: [...microtasks],
+//       macrotasks: [...macrotasks],
+//       output: [...output],
+//     };
+//   }
+
+//   function step() {
+//     if (finished) {
+//       return {
+//         state: getState(),
+//         action: "Simulation completed",
+//         finished: true,
+//       };
+//     }
+
+//     // ======================================
+//     // SYNCHRONOUS CODE
+//     // ======================================
+//     if (phase === "sync") {
+//       // 1. Enter Call Stack
+//       if (stage === "enter") {
+//         if (instructionIndex >= instructions.length) {
+//           phase = "microtask";
+//           stage = "enter";
+
+//           return {
+//             state: getState(),
+//             action: "Synchronous code completed",
+//             finished: false,
+//           };
+//         }
+
+//         currentInstruction = instructions[instructionIndex++];
+//         callStack.push(currentInstruction.type);
+//         stage = "execute";
+
+//         return {
+//           state: getState(),
+//           action: `${currentInstruction.type} entered Call Stack`,
+//           finished: false,
+//         };
+//       }
+
+//       // 2. Execute instruction
+//       if (stage === "execute") {
+//         const instr = currentInstruction;
+
+//         if (instr.type === "log") {
+//           output.push(instr.value);
+//         }
+
+//         // IMPORTANT:
+//         // Do NOT add Promise/Timeout to queues yet.
+//         // We wait until the stack frame is removed.
+
+//         stage = "leave";
+
+//         return {
+//           state: getState(),
+//           action: `Executing ${instr.type}`,
+//           finished: false,
+//         };
+//       }
+
+//       // 3. Leave Call Stack
+//       if (stage === "leave") {
+//         const instr = currentInstruction;
+
+//         callStack.pop();
+
+//         // Now schedule the async task
+//         if (instr.type === "promise") {
+//           microtasks.push(instr.value);
+//         }
+
+//         if (instr.type === "timeout") {
+//           macrotasks.push(instr.value);
+//         }
+
+//         currentInstruction = null;
+//         stage = "enter";
+
+//         return {
+//           state: getState(),
+//           action: "Call Stack operation completed",
+//           finished: false,
+//         };
+//       }
+//     }
+
+//     // ======================================
+//     // MICROTASKS
+//     // ======================================
+//     if (phase === "microtask") {
+//       if (stage === "enter") {
+//         if (microtasks.length === 0) {
+//           phase = "macrotask";
+//           stage = "enter";
+
+//           return {
+//             state: getState(),
+//             action: "Microtask queue completed",
+//             finished: false,
+//           };
+//         }
+
+//         currentTask = microtasks.shift();
+//         callStack.push("promise callback");
+//         stage = "execute";
+
+//         return {
+//           state: getState(),
+//           action: "Promise callback entered Call Stack",
+//           finished: false,
+//         };
+//       }
+
+//       if (stage === "execute") {
+//         output.push(currentTask);
+//         stage = "leave";
+
+//         return {
+//           state: getState(),
+//           action: "Running microtask callback",
+//           finished: false,
+//         };
+//       }
+
+//       if (stage === "leave") {
+//         callStack.pop();
+//         currentTask = null;
+//         stage = "enter";
+
+//         return {
+//           state: getState(),
+//           action: "Microtask callback completed",
+//           finished: false,
+//         };
+//       }
+//     }
+
+//     // ======================================
+//     // MACROTASKS
+//     // ======================================
+//     if (phase === "macrotask") {
+//       if (stage === "enter") {
+//         if (macrotasks.length === 0) {
+//           finished = true;
+
+//           return {
+//             state: getState(),
+//             action: "Simulation completed",
+//             finished: true,
+//           };
+//         }
+
+//         currentTask = macrotasks.shift();
+//         callStack.push("timeout callback");
+//         stage = "execute";
+
+//         return {
+//           state: getState(),
+//           action: "Timeout callback entered Call Stack",
+//           finished: false,
+//         };
+//       }
+
+//       if (stage === "execute") {
+//         output.push(currentTask);
+//         stage = "leave";
+
+//         return {
+//           state: getState(),
+//           action: "Running macrotask callback",
+//           finished: false,
+//         };
+//       }
+
+//       if (stage === "leave") {
+//         callStack.pop();
+//         currentTask = null;
+//         stage = "enter";
+
+//         return {
+//           state: getState(),
+//           action: "Macrotask callback completed",
+//           finished: false,
+//         };
+//       }
+//     }
+
+//     return {
+//       state: getState(),
+//       action: "Idle",
+//       finished: false,
+//     };
+//   }
+
+//   return {
+//     step,
+//     getState,
+//     isFinished: () => finished,
+//   };
+// }

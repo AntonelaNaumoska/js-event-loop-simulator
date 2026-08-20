@@ -63,10 +63,17 @@ export function parseCode(code) {
       }
 
       if (logArg) {
+        const delayArg = node.expression.arguments[1];
+
         instructions.push({
           type: "timeout",
           value:
             logArg.type === "Literal" ? String(logArg.value) : "[expression]",
+
+          delay:
+            delayArg?.type === "Literal" && typeof delayArg.value === "number"
+              ? delayArg.value
+              : 0,
         });
       }
 

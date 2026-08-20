@@ -19,7 +19,7 @@ export default function EventLoopCircle({ currentAction }) {
   }
 
   return (
-    <div className="bg-[#111216]/90 backdrop-blur-xl rounded-3xl p-6 border border-white/5 flex items-center justify-center min-h-[320px] shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+    <div className="bg-[#111216]/90 backdrop-blur-xl rounded-3xl p-6 border border-white/5 flex items-center justify-center min-h-[380px] shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
       <motion.div
         animate={{
           scale: [1, 1.08, 1],
@@ -32,7 +32,7 @@ export default function EventLoopCircle({ currentAction }) {
         className="relative flex items-center justify-center"
       >
         <div
-          className="w-40 h-40 rounded-full border-4 flex items-center justify-center text-center font-black text-xs tracking-[0.2em] transition-all duration-300"
+          className="w-48 h-48 rounded-full border-4 flex items-center justify-center text-center font-black text-xs tracking-[0.2em] transition-all duration-300"
           style={{
             borderColor: color,
             color,
@@ -49,7 +49,7 @@ export default function EventLoopCircle({ currentAction }) {
             repeat: Infinity,
             ease: "linear",
           }}
-          className="absolute w-48 h-48 rounded-full border border-dashed opacity-40"
+          className="absolute w-56 h-56 rounded-full border border-dashed opacity-40"
           style={{ borderColor: color }}
         />
       </motion.div>

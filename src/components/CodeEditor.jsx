@@ -21,7 +21,7 @@ export default function CodeEditor({ code, setCode }) {
     <div className="overflow-hidden rounded-2xl border border-white/5 bg-black">
       <CodeMirror
         value={code}
-        height="420px"
+        height="340px"
         theme={oneDark}
         extensions={[javascript(), editorTheme]}
         onChange={(value) => setCode(value)}
